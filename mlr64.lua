@@ -1,5 +1,5 @@
 -- mlr64
--- v2.2.1 @tehn 
+-- v2.2.4 @tehn 
 -- non varibright 64 mod
 -- llllllll.co/t/21145
 --
@@ -21,7 +21,6 @@
 -- /
 --
 --
-
 
 local g = grid.connect()
 
@@ -154,7 +153,7 @@ function event_exec(e)
     --if track[e.i].rev == 1 then n = -n end
     --engine.rate(e.i,n)
     if view == vREC then dirtygrid=true end
-    elseif e.t==ePATTERN then
+  elseif e.t==ePATTERN then
     if e.action=="stop" then pattern[e.i]:stop()
     elseif e.action=="start" then pattern[e.i]:start()
     elseif e.action=="rec_stop" then pattern[e.i]:rec_stop()
@@ -186,7 +185,7 @@ end
 function recall_watch(e)
   for i=1,3 do
     if recall[i].recording == true then
-      print("recall: event rec")
+      --print("recall: event rec")
       table.insert(recall[i].event, e)
       recall[i].has_data = true
     end
@@ -289,7 +288,7 @@ set_clip = function(i, x)
   local off = calc_quant_off(i, q)
   softcut.phase_quant(i,q)
   softcut.phase_offset(i,off)
-  track[i].loop = 0
+  --track[i].loop = 0
 end
 
 set_rec = function(n)
@@ -365,7 +364,6 @@ init = function()
   params:set_action("tempo", function() update_tempo() end)
   params:add_number("quant_div", "quant div", 1, 32, 4)
   params:set_action("quant_div",function() update_tempo() end)
-  
   params:add{type = "option", id = "crow_clock", name = "crow quant clock out",
   options = {"off","on"},
   action = function(value)
@@ -391,7 +389,7 @@ init = function()
     softcut.rec(i,0)
 
     softcut.level(i,1)
-    softcut.pan(i,0.5)
+    softcut.pan(i,0)
     softcut.buffer(i,1)
 
     softcut.pre_level(i,1)
@@ -404,7 +402,7 @@ init = function()
     softcut.loop_start(i,clip[track[i].clip].s)
     softcut.loop_end(i,clip[track[i].clip].e)
     softcut.loop(i,1)
-
+    softcut.position(i, clip[track[i].clip].s)
 
     params:add_control(i.."vol", i.."vol", UP1)
     params:set_action(i.."vol", function(x) softcut.level(i,x) end)
@@ -430,9 +428,12 @@ init = function()
 
     params:add_control(i.."level_slew", i.."level_slew", controlspec.new(0.0,10.0,"lin",0.1,0.1,""))
     params:set_action(i.."level_slew", function(x) softcut.level_slew_time(i,x) end)
+    params:add_file(i.."file", i.."file", "")
+    params:set_action(i.."file",
+      --function(n) print("FILESELECT > "..i.." "..n) end)
+      function(n) fileselect_callback(n,i) end)
 
     update_rate(i)
-
     set_clip(i,i)
     --softcut.phase_quant(i,calc_quant(i))
   end
@@ -516,7 +517,7 @@ gridkey_nav = function(x,y,z)
           local e={t=ePATTERN,i=i,action="rec_start"} event(e)
         elseif pattern[i].play == 1 then
            local e={t=ePATTERN,i=i,action="stop"} event(e)
-        else 
+        else
           local e={t=ePATTERN,i=i,action="start"} event(e)
       end
     elseif y==8 and x>0 and x<4 then
@@ -811,20 +812,22 @@ clip_action = 1
 clip_sel = 1
 clip_clear_mult = 3
 
-function fileselect_callback(path)
-  if path ~= "cancel" then
+function fileselect_callback(path, c)
+  print("FILESELECT "..c)
+  if path ~= "cancel" and path ~= "" then
     if audio.file_info(path) ~= nil then
-      print("file > "..path.." "..clip[track[clip_sel].clip].s)
-      local ch, len = sound_file_inspect(path)
+      print("file > "..path.." "..clip[track[c].clip].s)
+      local ch, len = audio.file_info(path)
       print("file length > "..len/48000)
       --softcut.buffer_read_mono(path, 0, clip[track[clip_sel].clip].s, len/48000, 1, 1)
-      softcut.buffer_read_mono(path, 0, clip[track[clip_sel].clip].s, CLIP_LEN_SEC, 1, 1)
+      softcut.buffer_read_mono(path, 0, clip[track[c].clip].s, CLIP_LEN_SEC, 1, 1)
       local l = math.min(len/48000, CLIP_LEN_SEC)
-      set_clip_length(track[clip_sel].clip, l)
-      clip[track[clip_sel].clip].name = path:match("[^/]*$")
+      set_clip_length(track[c].clip, l)
+      clip[track[c].clip].name = path:match("[^/]*$")
       -- TODO: STRIP extension
-      set_clip(clip_sel,track[clip_sel].clip)
-      update_rate(clip_sel)
+      set_clip(c,track[c].clip)
+      update_rate(c)
+      params:set(c.."file",path)
     else
       print("not a sound file")
     end
@@ -853,8 +856,9 @@ end
 v.key[vCLIP] = function(n,z)
   if n==2 and z==0 then
     if clip_actions[clip_action] == "load" then
-    screenredrawtimer:stop()
-      fileselect.enter(os.getenv("HOME").."/dust/audio", fileselect_callback)
+      screenredrawtimer:stop()
+      fileselect.enter(os.getenv("HOME").."/dust/audio",
+        function(n) fileselect_callback(n,clip_sel) end)
     elseif clip_actions[clip_action] == "clear" then
       local c_start = clip[track[clip_sel].clip].s * 48000
       print("clear_start: " .. c_start)
